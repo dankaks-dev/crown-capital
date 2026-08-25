@@ -1,0 +1,486 @@
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, Printer } from 'lucide-react';
+
+export default function PropertyJournal() {
+const [properties, setProperties] = useState(() => {
+const saved = localStorage.getItem('crownCapitalProperties');
+return saved ? JSON.parse(saved) : [];
+});
+
+const [selectedProperty, setSelectedProperty] = useState(null);
+const [showNewProperty, setShowNewProperty] = useState(false);
+const [newPropertyName, setNewPropertyName] = useState('');
+const [showNewEntry, setShowNewEntry] = useState(false);
+const [formData, setFormData] = useState({
+date: new Date().toISOString().split('T')[0],
+title: '',
+description: '',
+category: 'Maintenance',
+cost: '',
+receipt: false,
+photo: null
+});
+
+useEffect(() => {
+localStorage.setItem('crownCapitalProperties', JSON.stringify(properties));
+}, [properties]);
+
+const calculateImpactScore = (entry) => {
+const cost = parseFloat(entry.cost) || 0;
+
+if (entry.category === 'Improvement') {
+if (entry.title.toLowerCase().includes('loft')) return { impact: '+15-25%', value: '£52,500 - £87,500' };
+if (entry.title.toLowerCase().includes('extension')) return { impact: '+10-20%', value: '£35,000 - £70,000' };
+if (entry.title.toLowerCase().includes('bathroom')) return { impact: '+5-8%', value: '£17,500 - £28,000' };
+if (entry.title.toLowerCase().includes('solar') || entry.title.toLowerCase().includes('heat pump')) return { impact: '+3-5%', value: '£10,500 - £17,500' };
+return { impact: '+3-8%', value: '£10,500 - £28,000' };
+}
+
+if (entry.category === 'Repair') {
+if (entry.receipt && cost > 0) {
+const protected = (cost * 2.5).toFixed(0);
+return { impact: 'Protected', value: £${protected} (Risk Mitigation)` };
+}
+return { impact: 'Pending', value: 'Awaiting receipt' };
+}
+
+if (entry.category === 'Maintenance') {
+if (entry.receipt) return { impact: 'Protected', value: '£1,500 (Professional Log)' };
+return { impact: 'Logged', value: 'Add receipt to confirm' };
+}
+
+if (entry.category === 'Issue') {
+return { impact: '-5-15%', value: '£17,500 - £52,500 (Risk)' };
+}
+
+return { impact: '—', value: '—' };
+};
+
+const addProperty = () => {
+if (newPropertyName.trim()) {
+const newProp = {
+id: Date.now(),
+name: newPropertyName,
+entries: [],
+currentValue: 350000,
+createdDate: new Date().toISOString()
+};
+setProperties([...properties, newProp]);
+setSelectedProperty(newProp);
+setNewPropertyName('');
+setShowNewProperty(false);
+}
+};
+
+const addEntry = () => {
+if (!selectedProperty || !formData.title.trim() || !formData.description.trim()) return;
+
+const newEntry = {
+id: Date.now(),
+...formData,
+cost: formData.cost ? parseFloat(formData.cost) : null
+};
+
+const updatedProperty = {
+...selectedProperty,
+entries: [newEntry, ...selectedProperty.entries]
+};
+
+setProperties(properties.map(p => p.id === selectedProperty.id ? updatedProperty : p));
+setSelectedProperty(updatedProperty);
+
+setFormData({
+date: new Date().toISOString().split('T')[0],
+title: '',
+description: '',
+category: 'Maintenance',
+cost: '',
+receipt: false,
+photo: null
+});
+setShowNewEntry(false);
+};
+
+const deleteEntry = (entryId) => {
+const updatedProperty = {
+...selectedProperty,
+entries: selectedProperty.entries.filter(e => e.id !== entryId)
+};
+setProperties(properties.map(p => p.id === selectedProperty.id ? updatedProperty : p));
+setSelectedProperty(updatedProperty);
+};
+
+const deleteProperty = (propId) => {
+const updated = properties.filter(p => p.id !== propId);
+setProperties(updated);
+if (selectedProperty?.id === propId) {
+setSelectedProperty(null);
+}
+};
+
+const handlePhotoUpload = (e) => {
+const file = e.target.files[0];
+if (file) {
+const reader = new FileReader();
+reader.onload = (event) => {
+setFormData({ ...formData, photo: event.target.result });
+};
+reader.readAsDataURL(file);
+}
+};
+
+const printJournal = () => {
+if (!selectedProperty) return;
+
+const printWindow = window.open('', '', 'height=800,width=900');
+const entries = selectedProperty.entries
+.sort((a, b) => new Date(b.date) - new Date(a.date))
+.map(e => {
+const impact = calculateImpactScore(e);
+return &lt;div style="page-break-inside: avoid; border: 1px solid #ddd; padding: 20px; margin: 15px 0; border-radius: 8px;"&gt; &lt;div style="display: flex; justify-content: space-between; align-items: start;"&gt; &lt;div&gt; &lt;h3 style="margin: 0 0 5px 0; color: #333;"&gt;${e.title}</h3>
+<p style="margin: 0; color: #666; font-size: 14px;">{e.category}</p>
+</div>
+<span style="background: latex
+{e.category === 'Improvement' ? '#4ade80' : e.category === 'Issue' ? '#ef4444' : '#3b82f6'}; color: white; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px;"&gt;
+
+{impact.impact}</span>
+</div>
+<p style="margin: 12px 0; color: #333; line-height: 1.6;">{e.cost ? <p style="margin: 8px 0; color: #333; font-weight: 500;"&gt;Cost: £${e.cost}</p>: ''}${e.receipt ? <p style="margin: 8px 0; color: #16a34a; font-size: 14px;"&gt;✓ Receipt attached&lt;/p> : ''}
+<p style="margin: 12px 0; padding: 8px; background: #f3f4f6; border-radius: 4px; color: #555; font-size: 14px;">
+<strong>Valuation Impact:</strong> ${impact.value} &lt;/p&gt; &lt;/div&gt;;
+})
+.join('');
+
+const html = &lt;!DOCTYPE html&gt; &lt;html&gt; &lt;head&gt; &lt;title&gt;${selectedProperty.name} - Maintenance Journal</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 40px; color: #333; }
+h1 { font-size: 28px; margin: 0 0 10px 0; }
+.meta { color: #666; font-size: 14px; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+</style>
+</head>
+<body>
+<h1>{new Date().toLocaleDateString('en-GB')}</p>
+<p><strong>Total Entries:</strong> {entries}
+</body>
+</html>
+`;
+
+printWindow.document.write(html);
+printWindow.document.close();
+setTimeout(() => printWindow.print(), 250);
+};
+
+return (
+<div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
+{/* Header */}
+<div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', padding: '20px' }}>
+<div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+<h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Crown & Capital Journal</h1>
+<p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '14px' }}>Property Maintenance & Valuation Log</p>
+</div>
+</div>
+
+<div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px', display: 'grid', gridTemplateColumns: '300px 1fr', gap: '20px' }}>
+
+{/* Sidebar */}
+<div>
+<button
+onClick={() => setShowNewProperty(!showNewProperty)}
+style={{
+width: '100%',
+padding: '10px',
+backgroundColor: '#3b82f6',
+color: 'white',
+border: 'none',
+borderRadius: '6px',
+cursor: 'pointer',
+fontWeight: 'bold',
+display: 'flex',
+alignItems: 'center',
+justifyContent: 'center',
+gap: '8px',
+marginBottom: '15px'
+}}
+>
+<Plus size={18} /> New Property
+</button>
+
+{showNewProperty && (
+<div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '6px', marginBottom: '15px', border: '1px solid #e5e7eb' }}>
+<input
+type="text"
+placeholder="Property address or name"
+value={newPropertyName}
+onChange={(e) => setNewPropertyName(e.target.value)}
+style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', marginBottom: '10px', boxSizing: 'border-box' }}
+/>
+<button
+onClick={addProperty}
+style={{
+width: '100%',
+padding: '8px',
+backgroundColor: '#10b981',
+color: 'white',
+border: 'none',
+borderRadius: '4px',
+cursor: 'pointer',
+fontWeight: 'bold'
+}}
+>
+Create
+</button>
+</div>
+)}
+
+<div style={{ backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+{properties.length === 0 ? (
+<p style={{ padding: '15px', color: '#999', textAlign: 'center', fontSize: '14px' }}>No properties yet</p>
+) : (
+properties.map(prop => (
+<div
+key={prop.id}
+onClick={() => setSelectedProperty(prop)}
+style={{
+padding: '12px 15px',
+borderBottom: '1px solid #f3f4f6',
+cursor: 'pointer',
+backgroundColor: selectedProperty?.id === prop.id ? '#eff6ff' : '#fff',
+borderLeft: selectedProperty?.id === prop.id ? '4px solid #3b82f6' : '4px solid transparent'
+}}
+>
+<p style={{ margin: 0, fontWeight: selectedProperty?.id === prop.id ? 'bold' : 'normal', color: '#333' }}>{prop.name}</p>
+<p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#999' }}>{prop.entries.length} entries</p>
+</div>
+))
+)}
+</div>
+</div>
+
+{/* Main Content */}
+<div>
+{selectedProperty ? (
+<>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+<div>
+<h2 style={{ margin: 0, fontSize: '20px' }}>{selectedProperty.name}</h2>
+<p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '14px' }}>{selectedProperty.entries.length} log entries</p>
+</div>
+<div style={{ display: 'flex', gap: '10px' }}>
+<button
+onClick={printJournal}
+style={{
+padding: '10px 15px',
+backgroundColor: '#6366f1',
+color: 'white',
+border: 'none',
+borderRadius: '6px',
+cursor: 'pointer',
+fontWeight: 'bold',
+display: 'flex',
+alignItems: 'center',
+gap: '8px'
+}}
+>
+<Printer size={18} /> Print
+</button>
+<button
+onClick={() => deleteProperty(selectedProperty.id)}
+style={{
+padding: '10px 15px',
+backgroundColor: '#ef4444',
+color: 'white',
+border: 'none',
+borderRadius: '6px',
+cursor: 'pointer',
+fontWeight: 'bold'
+}}
+>
+Delete
+</button>
+</div>
+</div>
+
+<button
+onClick={() => setShowNewEntry(!showNewEntry)}
+style={{
+width: '100%',
+padding: '12px',
+backgroundColor: '#10b981',
+color: 'white',
+border: 'none',
+borderRadius: '6px',
+cursor: 'pointer',
+fontWeight: 'bold',
+marginBottom: '20px',
+display: 'flex',
+alignItems: 'center',
+justifyContent: 'center',
+gap: '8px'
+}}
+>
+<Plus size={18} /> Log New Entry
+</button>
+
+{showNewEntry && (
+<div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '6px', marginBottom: '20px', border: '1px solid #e5e7eb' }}>
+<input
+type="date"
+value={formData.date}
+onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', marginBottom: '12px', boxSizing: 'border-box' }}
+/>
+
+<input
+type="text"
+placeholder="Title (e.g., Boiler Service, Roof Repair, Loft Conversion)"
+value={formData.title}
+onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', marginBottom: '12px', boxSizing: 'border-box', fontSize: '14px' }}
+/>
+
+<textarea
+placeholder="What happened? What was done?"
+value={formData.description}
+onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', marginBottom: '12px', boxSizing: 'border-box', minHeight: '80px', fontFamily: 'inherit' }}
+/>
+
+<select
+value={formData.category}
+onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', marginBottom: '12px', boxSizing: 'border-box' }}
+>
+<option>Maintenance</option>
+<option>Repair</option>
+<option>Improvement</option>
+<option>Issue</option>
+</select>
+
+<input
+type="number"
+placeholder="Cost (£) - optional"
+value={formData.cost}
+onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
+style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', marginBottom: '12px', boxSizing: 'border-box' }}
+/>
+
+<label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', cursor: 'pointer' }}>
+<input
+type="checkbox"
+checked={formData.receipt}
+onChange={(e) => setFormData({ ...formData, receipt: e.target.checked })}
+style={{ cursor: 'pointer' }}
+/>
+<span>Receipt attached / Professional cert</span>
+</label>
+
+<label style={{ display: 'block', marginBottom: '12px' }}>
+<span style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>Add photo (optional)</span>
+<input
+type="file"
+accept="image/*"
+onChange={handlePhotoUpload}
+style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', boxSizing: 'border-box' }}
+/>
+</label>
+
+{formData.photo && (
+<img
+src={formData.photo}
+alt="preview"
+style={{ width: '100%', borderRadius: '4px', marginBottom: '12px', maxHeight: '200px', objectFit: 'cover' }}
+/>
+)}
+
+<button
+onClick={addEntry}
+style={{
+width: '100%',
+padding: '10px',
+backgroundColor: '#10b981',
+color: 'white',
+border: 'none',
+borderRadius: '4px',
+cursor: 'pointer',
+fontWeight: 'bold'
+}}
+>
+Log Entry
+</button>
+</div>
+)}
+
+{selectedProperty.entries.length === 0 ? (
+<p style={{ color: '#999', textAlign: 'center', padding: '40px', fontSize: '14px' }}>No entries yet. Start logging.</p>
+) : (
+selectedProperty.entries
+.sort((a, b) => new Date(b.date) - new Date(a.date))
+.map(entry => {
+const impact = calculateImpactScore(entry);
+return (
+<div key={entry.id} style={{ backgroundColor: '#fff', padding: '18px', borderRadius: '6px', marginBottom: '15px', border: '1px solid #e5e7eb' }}>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+<div>
+<h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>{entry.title}</h3>
+<p style={{ margin: '4px 0 0 0', color: '#666', fontSize: '13px' }}>{entry.date} • {entry.category}</p>
+</div>
+<div style={{ display: 'flex', gap: '10px', alignItems: 'start' }}>
+<span style={{
+backgroundColor: entry.category === 'Improvement' ? '#4ade80' : entry.category === 'Issue' ? '#ef4444' : '#3b82f6',
+color: 'white',
+padding: '6px 12px',
+borderRadius: '4px',
+fontWeight: 'bold',
+fontSize: '12px',
+whiteSpace: 'nowrap'
+}}>
+{impact.impact}
+</span>
+<button
+onClick={() => deleteEntry(entry.id)}
+style={{
+backgroundColor: 'transparent',
+border: 'none',
+color: '#ef4444',
+cursor: 'pointer',
+padding: '4px 8px'
+}}
+>
+<Trash2 size={16} />
+</button>
+</div>
+</div>
+
+<p style={{ margin: '0 0 12px 0', color: '#333', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{entry.description}</p>
+
+{entry.cost && <p style={{ margin: '8px 0', color: '#333', fontWeight: '500' }}>Cost: £{entry.cost}</p>}
+{entry.receipt && <p style={{ margin: '8px 0', color: '#16a34a', fontSize: '13px', fontWeight: '500' }}>✓ Receipt attached</p>}
+
+{entry.photo && (
+<img
+src={entry.photo}
+alt="entry"
+style={{ width: '100%', borderRadius: '4px', marginTop: '12px', maxHeight: '300px', objectFit: 'cover' }}
+/>
+)}
+
+<div style={{ marginTop: '12px', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '4px' }}>
+<p style={{ margin: 0, color: '#555', fontSize: '13px' }}>
+<strong>Valuation Impact:</strong> {impact.value}
+</p>
+</div>
+</div>
+);
+})
+)}
+</>
+) : (
+<div style={{ textAlign: 'center', padding: '60px 20px', color: '#999' }}>
+<p style={{ fontSize: '16px' }}>Create a property to get started</p>
+</div>
+)}
+</div>
+</div>
+</div>
+);
+}
