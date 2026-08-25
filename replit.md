@@ -1,6 +1,6 @@
-# [Project name]
+# Crown Capital
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Crown Capital is a premium wealth and investment landing experience for people building something meant to last.
 
 ## Run & Operate
 
@@ -22,15 +22,21 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/crown-capital/src/App.tsx` — single-page landing experience and interactions
+- `artifacts/crown-capital/src/index.css` — Crown Capital visual system, typography, texture, and responsive styles
+- `artifacts/crown-capital/package.json` — React/Vite app scripts and dependencies
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The first release is presentation-first and intentionally has no backend.
+- The app uses a single-page route with anchor navigation so the brand story stays continuous.
+- Primary conversation CTAs use a lightweight in-page dialog and local submission state.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- A responsive Crown Capital brand site with a premium editorial feel.
+- Sections covering the firm's approach, portfolio operating view, perspective notes, relationship principles, and FAQs.
+- Working mobile navigation, FAQ accordion, smooth section navigation, and private-conversation CTA flow.
 
 ## User preferences
 

@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Crown Capital"
+description = "A polished React web app for Crown Capital, a modern wealth and investment platform."
+version = "1.0.0"
+id = "artifacts/crown-capital"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22215
+
+[services.development]
+run = "pnpm --filter @workspace/crown-capital run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/crown-capital", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/crown-capital/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22215"
+BASE_PATH = "/"
