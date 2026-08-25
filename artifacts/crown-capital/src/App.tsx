@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Printer, Upload, X, Building2, FileText } from 'lucide-react';
+import { Plus, Trash2, Printer, Upload, X, Building2, FileText, Download } from 'lucide-react';
 
 type Category = 'Maintenance' | 'Repair' | 'Improvement' | 'Issue';
 type Entry = {
@@ -67,6 +67,16 @@ function App() {
   const [entryForm, setEntryForm] = useState(emptyEntry);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'All' | Category>('All');
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    const captureInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    window.addEventListener('beforeinstallprompt', captureInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('crownCapitalProperties', JSON.stringify(properties));
@@ -133,9 +143,15 @@ function App() {
     setTimeout(() => printWindow.print(), 250);
   };
 
+  const installApp = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    setInstallPrompt(null);
+  };
+
   return (
     <div className="property-journal">
-      <header className="pj-header"><div className="pj-brand"><span className="pj-crown">C</span><div><strong>Crown &amp; Capital</strong><small>Property maintenance &amp; valuation log</small></div></div><div className="pj-header-note">Every detail, accounted for.</div></header>
+      <header className="pj-header"><div className="pj-brand"><span className="pj-crown">C</span><div><strong>Crown &amp; Capital</strong><small>Property maintenance &amp; valuation log</small></div></div><div className="pj-header-actions">{installPrompt && <button className="pj-install" onClick={installApp}><Download size={14} /> Install app</button>}<div className="pj-header-note">Works offline · Every detail, accounted for.</div></div></header>
       <div className="pj-layout">
         <aside className="pj-sidebar">
           <button className="pj-primary pj-full" onClick={() => setShowPropertyForm((open) => !open)}><Plus size={17} /> New property</button>

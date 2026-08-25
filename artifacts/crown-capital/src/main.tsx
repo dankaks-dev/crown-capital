@@ -5,6 +5,14 @@ import { ErrorBoundary } from '@/components/error-boundary';
 
 import './index.css';
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+      // The app remains fully usable when service workers are unavailable.
+    });
+  });
+}
+
 createRoot(document.getElementById('root')!, {
   // Keeps caught errors off reportError(), which would raise the dev overlay.
   onCaughtError: (error, errorInfo) => {
