@@ -86,6 +86,40 @@ function AuthScreen() {
   };
 
   return (
+    <div className="hv-auth">
+      <div className="hv-auth-card">
+        <div className="hv-auth-brand">
+          <span className="hv-auth-mark">H</span>
+          <div><strong>HomeVault</strong><small>Property maintenance &amp; valuation log</small></div>
+        </div>
+        <h1>{mode === 'signin' ? <>Welcome <em>back.</em></> : <>Start your <em>record.</em></>}</h1>
+        <p className="hv-auth-sub">
+          {mode === 'signin'
+            ? 'Sign in to your property records.'
+            : 'Track the care, improvements, and decisions that protect the value of your property.'}
+        </p>
+        <form onSubmit={submit}>
+          <label>Email
+            <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+          </label>
+          <label>Password
+            <input type="password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" />
+          </label>
+          {message && <p className="hv-auth-message">{message}</p>}
+          <button type="submit" className="hv-auth-submit" disabled={busy}>
+            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+          </button>
+        </form>
+        <button type="button" className="hv-auth-switch" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage(null); }}>
+          {mode === 'signin' ? 'No account? Create one' : 'Already have an account? Sign in'}
+        </button>
+        <p className="hv-auth-foot">Your property. Your records. Your proof.</p>
+      </div>
+    </div>
+  );
+}
+
+  return (
     <div className="property-journal">
       <header className="pj-header"><div className="pj-brand"><span className="pj-crown">H</span><div><strong>HomeVault</strong><small>Property maintenance &amp; valuation log</small></div></div></header>
       <div className="pj-layout">
