@@ -119,35 +119,6 @@ function AuthScreen() {
   );
 }
 
-  return (
-    <div className="property-journal">
-      <header className="pj-header"><div className="pj-brand"><span className="pj-crown">H</span><div><strong>HomeVault</strong><small>Property maintenance &amp; valuation log</small></div></div></header>
-      <div className="pj-layout">
-        <main className="pj-main">
-          <div className="pj-welcome">
-            <div className="pj-welcome-icon"><FileText size={27} /></div>
-            <p className="pj-kicker">HomeVault</p>
-            <h1>Keep a record of<br /><em>what makes a home.</em></h1>
-            <form className="pj-entry-form" onSubmit={submit}>
-              <label>Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
-              <label>Password<input type="password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" /></label>
-              {message && <p className="pj-muted">{message}</p>}
-              <div className="pj-form-actions">
-                <button type="button" className="pj-outline" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage(null); }}>
-                  {mode === 'signin' ? 'Create an account' : 'I already have an account'}
-                </button>
-                <button type="submit" className="pj-primary" disabled={busy}>
-                  {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Sign up'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-}
-
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
