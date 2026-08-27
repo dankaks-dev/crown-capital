@@ -334,3 +334,40 @@ footer { display: flex; justify-content: space-between; padding: 47px 0 5px; col
 .hv-expiry-banner { margin: 0 0 22px; padding: 14px 16px; border-radius: 4px; background: #fbefd9; color: #8a6428; font-size: 12px; line-height: 1.6; }
 .hv-expiry-banner strong { display: block; margin-bottom: 4px; font-size: 12px; }
 @media (max-width: 760px) { .hv-doc-grid { grid-template-columns: 1fr; gap: 0; } .hv-doc { grid-template-columns: 30px 1fr; gap: 10px; } .hv-doc-status, .hv-doc-actions { grid-column: 2; justify-self: start; margin-top: 8px; } }
+.hv-vp { margin-top: 46px; }
+.hv-vp-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
+.hv-vp-head h2 { margin-top: 9px; font: 400 29px 'DM Serif Display', serif; color: #243735; }
+.hv-vp-baseline { padding: 23px; border: 1px solid #dce8e0; border-radius: 5px; background: #f0f7f2; }
+.hv-vp-baseline label { display: block; color: #5f766d; font-size: 10px; font-weight: 600; }
+.hv-vp-baseline input { display: block; width: 100%; box-sizing: border-box; margin-top: 7px; padding: 10px 11px; border: 1px solid #d7e2db; border-radius: 4px; outline: 0; background: #fff; font: 11px 'DM Sans', sans-serif; color: #243735; }
+.hv-vp-baseline p { margin: 0 0 14px; color: #74827c; font-size: 12px; line-height: 1.6; }
+.hv-money { padding: 28px; border: 1px solid #dce8e0; border-radius: 5px; background: #fff; }
+.hv-money-label { color: #9b7845; font: 700 9px 'Space Mono', monospace; letter-spacing: .16em; text-transform: uppercase; }
+.hv-money-main { margin: 12px 0 6px; font: 400 46px 'DM Serif Display', serif; color: #285b54; letter-spacing: -.03em; }
+.hv-money-range { margin: 0; color: #74827c; font-size: 12px; }
+.hv-money-waterfall { margin: 24px 0 0; padding-top: 18px; border-top: 1px solid #e8eeea; }
+.hv-money-row { display: flex; justify-content: space-between; gap: 14px; padding: 7px 0; color: #74827c; font-size: 12px; }
+.hv-money-row strong { color: #243735; font-weight: 600; }
+.hv-money-row-total { padding-top: 12px; margin-top: 6px; border-top: 1px solid #e8eeea; }
+.hv-money-note { margin: 14px 0 0; padding: 11px 13px; border-radius: 4px; background: #fbf0dd; color: #8a6428; font-size: 11px; line-height: 1.5; }
+.hv-money-disclaimer { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid #e8eeea; color: #9baaa3; font-size: 10px; line-height: 1.6; }
+.hv-exposure { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.hv-exp-card { padding: 20px; border: 1px solid #e1e8e3; border-radius: 5px; background: #fff; }
+.hv-exp-green { border-color: #cfe5d8; background: #f2f9f5; }
+.hv-exp-red { border-color: #f0d9d4; background: #fdf5f3; }
+.hv-exp-card span { display: block; color: #82918b; font-size: 10px; }
+.hv-exp-card strong { display: block; margin-top: 8px; font: 400 27px 'DM Serif Display', serif; }
+.hv-exp-green strong { color: #35745c; }
+.hv-exp-red strong { color: #a65449; }
+.hv-exp-list { margin-top: 12px; }
+.hv-exp-item { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid #eceee9; color: #74827c; font-size: 11px; }
+.hv-exp-item button { border: 0; background: transparent; color: #38635b; font-size: 11px; cursor: pointer; }
+.hv-whatif { margin-top: 14px; padding: 23px; border: 1px solid #dce8e0; border-radius: 5px; background: #f0f7f2; }
+.hv-whatif label { display: block; margin-top: 12px; color: #5f766d; font-size: 10px; font-weight: 600; }
+.hv-whatif > label:first-of-type { margin-top: 0; }
+.hv-whatif select, .hv-whatif input { display: block; width: 100%; box-sizing: border-box; margin-top: 7px; padding: 10px 11px; border: 1px solid #d7e2db; border-radius: 4px; outline: 0; background: #fff; font: 11px 'DM Sans', sans-serif; color: #243735; }
+.hv-whatif-result { margin-top: 16px; padding: 15px; border-radius: 4px; background: #fff; border: 1px solid #dce8e0; }
+.hv-whatif-result strong { display: block; font: 400 26px 'DM Serif Display', serif; color: #285b54; }
+.hv-whatif-result span { display: block; margin-top: 6px; color: #74827c; font-size: 11px; }
+.hv-vp-empty { padding: 40px 15px; text-align: center; color: #84928b; font-size: 12px; }
+@media (max-width: 760px) { .hv-exposure { grid-template-columns: 1fr; } .hv-money-main { font-size: 36px; } }
