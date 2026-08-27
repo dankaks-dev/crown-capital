@@ -304,3 +304,33 @@ footer { display: flex; justify-content: space-between; padding: 47px 0 5px; col
 .hv-locked-tag { display: inline-block; margin-left: 8px; padding: 3px 7px; border-radius: 3px; background: #f0ece4; color: #8a7a5c; font-size: 9px; font-weight: 700; }
 .hv-tier-badge { padding: 5px 9px; border-radius: 3px; background: #e4eee8; color: #28635d; font: 700 9px 'Space Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
 @media (max-width: 760px) { .hv-plans { grid-template-columns: 1fr; } }
+.hv-vault { margin-top: 46px; }
+.hv-vault-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
+.hv-vault-head h2 { margin-top: 9px; font: 400 29px 'DM Serif Display', serif; color: #243735; }
+.hv-doc-form { margin-bottom: 22px; padding: 23px; border: 1px solid #dce8e0; border-radius: 5px; background: #f0f7f2; }
+.hv-doc-form label { display: block; margin-top: 14px; color: #5f766d; font-size: 10px; font-weight: 600; }
+.hv-doc-form > label:first-of-type { margin-top: 0; }
+.hv-doc-form input, .hv-doc-form select { display: block; width: 100%; box-sizing: border-box; margin-top: 7px; padding: 10px 11px; border: 1px solid #d7e2db; border-radius: 4px; outline: 0; background: #fff; color: #243735; font: 11px 'DM Sans', sans-serif; }
+.hv-doc-form input:focus, .hv-doc-form select:focus { border-color: #76a196; box-shadow: 0 0 0 3px #e4efea; }
+.hv-doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.hv-doc-upload { display: flex !important; align-items: center; gap: 8px; padding: 10px 0; color: #39736a !important; cursor: pointer; }
+.hv-doc-upload input { display: none; }
+.hv-doc-filename { margin: 4px 0 0; color: #74827c; font-size: 11px; }
+.hv-docs { border-top: 1px solid #e0e8e2; }
+.hv-doc { display: grid; grid-template-columns: 34px 1fr auto auto; align-items: center; gap: 13px; padding: 16px 8px; border-bottom: 1px solid #e8eeea; }
+.hv-doc-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 4px; background: #e4eff1; color: #467480; }
+.hv-doc-main strong { display: block; font-size: 13px; font-weight: 600; color: #243735; }
+.hv-doc-main span { display: block; margin-top: 4px; color: #82918b; font-size: 10px; }
+.hv-doc-status { padding: 6px 9px; border-radius: 3px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.hv-doc-valid { background: #e0f1e7; color: #35745c; }
+.hv-doc-soon { background: #fbefd9; color: #a87737; }
+.hv-doc-expired { background: #f9e5e1; color: #a65449; }
+.hv-doc-none { background: #eef2ef; color: #7d8b85; }
+.hv-doc-actions { display: flex; gap: 10px; align-items: center; }
+.hv-doc-actions button, .hv-doc-actions a { border: 0; background: transparent; color: #38635b; font-size: 11px; cursor: pointer; text-decoration: none; }
+.hv-doc-actions button:last-child { color: #bd7364; }
+.hv-doc-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 50px 15px; color: #84928b; font-size: 12px; }
+.hv-doc-empty svg { color: #bc8c4b; }
+.hv-expiry-banner { margin: 0 0 22px; padding: 14px 16px; border-radius: 4px; background: #fbefd9; color: #8a6428; font-size: 12px; line-height: 1.6; }
+.hv-expiry-banner strong { display: block; margin-bottom: 4px; font-size: 12px; }
+@media (max-width: 760px) { .hv-doc-grid { grid-template-columns: 1fr; gap: 0; } .hv-doc { grid-template-columns: 30px 1fr; gap: 10px; } .hv-doc-status, .hv-doc-actions { grid-column: 2; justify-self: start; margin-top: 8px; } }
