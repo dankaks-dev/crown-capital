@@ -8,14 +8,12 @@ import {
   FileText,
   Home,
   Image as ImageIcon,
-  Laptop,
   MapPin,
   Receipt,
   ShieldCheck,
-  Smartphone,
   TrendingUp,
   Wrench,
-  X,
+  AlertTriangle,
 } from "lucide-react";
 import "./HomeVault.css";
 
@@ -50,7 +48,7 @@ const features = [
     text: "Project the potential contribution of improvements using UK market data and HM Land Registry price-paid figures.",
   },
   {
-    icon: X,
+    icon: AlertTriangle,,
     eyebrow: "05 / Loss exposure",
     title: "See what unresolved issues are costing.",
     text: "Surface outstanding defects and understand the potential exposure before they become more expensive problems.",
