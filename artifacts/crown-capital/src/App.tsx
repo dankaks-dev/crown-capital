@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Printer, Upload, X, Building2, FileText, LogOut } from 'lucide-react';
+import { Plus, Trash2, Printer, Upload, X, Building2, FileText, LogOut, Lock } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import Landing from '@/components/Landing';
 
 type Category = 'Maintenance' | 'Repair' | 'Improvement' | 'Issue';
+type Tier = 'free' | 'pro' | 'portfolio';
 type Entry = {
   id: string;
   date: string;
@@ -22,6 +23,9 @@ type Property = {
   currentValue: number | null;
   createdDate: string;
 };
+
+const LIMITS: Record<Tier, number> = { free: 1, pro: 3, portfolio: Infinity };
+const TIER_LABEL: Record<Tier, string> = { free: 'Free', pro: 'Pro', portfolio: 'Portfolio' };
 
 const emptyEntry = () => ({
   date: new Date().toISOString().split('T')[0],
@@ -120,10 +124,42 @@ function AuthScreen() {
   );
 }
 
+function UpgradePanel({ tier, onCheckout, busy }: { tier: Tier; onCheckout: (tier: 'pro' | 'portfolio') => void; busy: boolean }) {
+  return (
+    <div className="hv-upgrade">
+      <div className="hv-upgrade-head">
+        <p className="pj-kicker">Your plan</p>
+        <h2>Room for more properties</h2>
+        <p>You're on {TIER_LABEL[tier]}. Upgrade to keep records for more of your portfolio.</p>
+      </div>
+      <div className="hv-plans">
+        <div className={`hv-plan ${tier === 'pro' ? 'hv-plan-featured' : ''}`}>
+          <span className="hv-plan-name">HomeVault Pro</span>
+          <div className="hv-plan-price"><strong>£5.99</strong><span>per month</span></div>
+          <p>Up to 3 properties, full maintenance record.</p>
+          <button onClick={() => onCheckout('pro')} disabled={busy || tier === 'pro' || tier === 'portfolio'}>
+            {tier === 'pro' ? 'Current plan' : busy ? 'Please wait…' : 'Choose Pro'}
+          </button>
+        </div>
+        <div className={`hv-plan ${tier === 'portfolio' ? 'hv-plan-featured' : ''}`}>
+          <span className="hv-plan-name">HomeVault Portfolio</span>
+          <div className="hv-plan-price"><strong>£9.99</strong><span>per month</span></div>
+          <p>Unlimited properties for landlords and larger portfolios.</p>
+          <button onClick={() => onCheckout('portfolio')} disabled={busy || tier === 'portfolio'}>
+            {tier === 'portfolio' ? 'Current plan' : busy ? 'Please wait…' : 'Choose Portfolio'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [showAuth, setShowAuth] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+  const [tier, setTier] = useState<Tier>('free');
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showPropertyForm, setShowPropertyForm] = useState(false);
@@ -142,6 +178,12 @@ function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  const loadTier = async () => {
+    const { data } = await supabase.from('subscriptions').select('tier, status').maybeSingle();
+    if (data && data.status === 'active') setTier(data.tier as Tier);
+    else setTier('free');
+  };
 
   const loadData = async () => {
     const { data: rows, error: propertyError } = await supabase
@@ -171,11 +213,41 @@ function App() {
   };
 
   useEffect(() => {
-    if (session) loadData();
-    else { setProperties([]); setSelectedId(null); }
+    if (session) { loadTier(); loadData(); }
+    else { setProperties([]); setSelectedId(null); setTier('free'); }
   }, [session]);
 
+  useEffect(() => {
+    if (!session) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') !== 'success') return;
+    const sessionId = params.get('session_id');
+    if (!sessionId) return;
+    (async () => {
+      const { data: authData } = await supabase.auth.getSession();
+      const token = authData.session?.access_token;
+      if (!token) return;
+      const response = await fetch('/api/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sessionId }),
+      });
+      const result = await response.json();
+      if (result.success) { setTier(result.tier as Tier); setShowUpgrade(false); }
+      else setError(result.error || 'Could not confirm payment.');
+      window.history.replaceState({}, '', window.location.pathname);
+    })();
+  }, [session]);
+
+  const limit = LIMITS[tier];
+  const unlockedIds = useMemo(
+    () => new Set(properties.slice(0, limit === Infinity ? properties.length : limit).map((p) => p.id)),
+    [properties, limit],
+  );
+  const atLimit = properties.length >= limit;
   const selectedProperty = properties.find((property) => property.id === selectedId) || null;
+  const selectedLocked = selectedProperty ? !unlockedIds.has(selectedProperty.id) : false;
+
   const filteredEntries = useMemo(() => {
     if (!selectedProperty) return [];
     return [...selectedProperty.entries]
@@ -184,9 +256,26 @@ function App() {
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [selectedProperty, categoryFilter, search]);
 
+  const startCheckout = async (plan: 'pro' | 'portfolio') => {
+    setBusy(true);
+    const { data: authData } = await supabase.auth.getSession();
+    const token = authData.session?.access_token;
+    if (!token) { setBusy(false); setError('Please sign in again.'); return; }
+    const response = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ tier: plan }),
+    });
+    const result = await response.json();
+    setBusy(false);
+    if (result.url) window.location.href = result.url;
+    else setError(result.error || 'Could not start checkout.');
+  };
+
   const addProperty = async () => {
     const name = propertyName.trim();
     if (!name || !session) return;
+    if (atLimit) { setShowUpgrade(true); setShowPropertyForm(false); return; }
     setBusy(true);
     const { data, error: insertError } = await supabase.from('properties')
       .insert({ user_id: session.user.id, address: name })
@@ -201,7 +290,7 @@ function App() {
 
   const addEntry = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedProperty || !session) return;
+    if (!selectedProperty || !session || selectedLocked) return;
     if (!entryForm.title.trim() || !entryForm.description.trim()) return;
     setBusy(true);
     let photoPath: string | null = null;
@@ -284,25 +373,28 @@ function App() {
 
   return (
     <div className="property-journal">
-      <header className="pj-header"><div className="pj-brand"><span className="pj-crown">H</span><div><strong>HomeVault</strong><small>Property maintenance &amp; valuation log</small></div></div><div className="pj-header-actions"><button className="pj-outline" onClick={() => supabase.auth.signOut()}><LogOut size={14} /> Sign out</button></div></header>
+      <header className="pj-header"><div className="pj-brand"><span className="pj-crown">H</span><div><strong>HomeVault</strong><small>Property maintenance &amp; valuation log</small></div></div><div className="pj-header-actions"><span className="hv-tier-badge">{TIER_LABEL[tier]}</span>{tier !== 'portfolio' && <button className="pj-outline" onClick={() => setShowUpgrade((open) => !open)}>Upgrade</button>}<button className="pj-outline" onClick={() => supabase.auth.signOut()}><LogOut size={14} /> Sign out</button></div></header>
       {error && <div className="pj-inline-form"><span>{error}</span><button className="pj-outline" onClick={() => setError(null)}>Dismiss</button></div>}
       <div className="pj-layout">
         <aside className="pj-sidebar">
-          <button className="pj-primary pj-full" onClick={() => setShowPropertyForm((open) => !open)}><Plus size={17} /> New property</button>
-          {showPropertyForm && <div className="pj-inline-form"><input autoFocus value={propertyName} onChange={(event) => setPropertyName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && addProperty()} placeholder="Property address or name" /><button className="pj-secondary pj-full" onClick={addProperty} disabled={busy}>Create property</button></div>}
+          <button className="pj-primary pj-full" onClick={() => atLimit ? setShowUpgrade(true) : setShowPropertyForm((open) => !open)}><Plus size={17} /> New property</button>
+          {atLimit && <p className="hv-limit-note">You've reached the {TIER_LABEL[tier]} limit of {limit} {limit === 1 ? 'property' : 'properties'}. Upgrade to add more.</p>}
+          {showPropertyForm && !atLimit && <div className="pj-inline-form"><input autoFocus value={propertyName} onChange={(event) => setPropertyName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && addProperty()} placeholder="Property address or name" /><button className="pj-secondary pj-full" onClick={addProperty} disabled={busy}>Create property</button></div>}
           <div className="pj-sidebar-label">Your properties</div>
-          {!properties.length ? <div className="pj-empty-side"><Building2 size={20} /><span>No properties yet.</span><small>Create one to get started.</small></div> : properties.map((property) => <button className={`pj-property ${selectedId === property.id ? 'pj-property-active' : ''}`} key={property.id} onClick={() => setSelectedId(property.id)}><span>{property.name}</span><small>{property.entries.length} {property.entries.length === 1 ? 'entry' : 'entries'}</small></button>)}
+          {!properties.length ? <div className="pj-empty-side"><Building2 size={20} /><span>No properties yet.</span><small>Create one to get started.</small></div> : properties.map((property) => { const locked = !unlockedIds.has(property.id); return <button className={`pj-property ${selectedId === property.id ? 'pj-property-active' : ''} ${locked ? 'hv-locked' : ''}`} key={property.id} onClick={() => setSelectedId(property.id)}><span>{property.name}{locked && <span className="hv-locked-tag">Read only</span>}</span><small>{property.entries.length} {property.entries.length === 1 ? 'entry' : 'entries'}</small></button>; })}
           <div className="pj-side-footer">Secure record<br /><span>Your data is saved to your account.</span></div>
         </aside>
 
         <main className="pj-main">
-          {!selectedProperty ? <div className="pj-welcome"><div className="pj-welcome-icon"><FileText size={27} /></div><p className="pj-kicker">HomeVault / Field notes</p><h1>Keep a record of<br /><em>what makes a home.</em></h1><p className="pj-lead">Track the care, improvements, and decisions that protect the value of your property portfolio.</p><button className="pj-primary" onClick={() => setShowPropertyForm(true)}><Plus size={17} /> Add your first property</button></div> : <>
+          {showUpgrade && <UpgradePanel tier={tier} onCheckout={startCheckout} busy={busy} />}
+          {!selectedProperty ? <div className="pj-welcome"><div className="pj-welcome-icon"><FileText size={27} /></div><p className="pj-kicker">HomeVault / Field notes</p><h1>Keep a record of<br /><em>what makes a home.</em></h1><p className="pj-lead">Track the care, improvements, and decisions that protect the value of your property portfolio.</p><button className="pj-primary" onClick={() => atLimit ? setShowUpgrade(true) : setShowPropertyForm(true)}><Plus size={17} /> Add your first property</button></div> : <>
             <div className="pj-property-head"><div><p className="pj-kicker">Selected property</p><h1>{selectedProperty.name}</h1><p className="pj-muted">{selectedProperty.entries.length} log entries · {selectedProperty.currentValue !== null ? `Current value £${selectedProperty.currentValue.toLocaleString('en-GB')}` : 'Add your property value'}</p></div><div className="pj-actions"><button className="pj-outline" onClick={printJournal}><Printer size={16} /> Print</button><button className="pj-danger" onClick={() => deleteProperty(selectedProperty.id)}><Trash2 size={16} /> Delete</button></div></div>
+            {selectedLocked && <p className="hv-limit-note"><Lock size={12} /> This property is read only on your current plan. Upgrade to log new entries.</p>}
             <div className="pj-summary"><div><span>Total entries</span><strong>{selectedProperty.entries.length}</strong></div><div><span>Improvements</span><strong>{selectedProperty.entries.filter((entry) => entry.category === 'Improvement').length}</strong></div><div><span>Receipts attached</span><strong>{selectedProperty.entries.filter((entry) => entry.receipt).length}</strong></div><div><span>Last updated</span><strong>{selectedProperty.entries[0]?.date || '—'}</strong></div></div>
-            <div className="pj-log-head"><div><p className="pj-kicker">The record</p><h2>Maintenance journal</h2></div><button className="pj-primary" onClick={() => setShowEntryForm((open) => !open)}><Plus size={17} /> Log new entry</button></div>
-            {showEntryForm && <form className="pj-entry-form" onSubmit={addEntry}><div className="pj-form-grid"><label>Date<input type="date" value={entryForm.date} onChange={(event) => setEntryForm({ ...entryForm, date: event.target.value })} /></label><label>Category<select value={entryForm.category} onChange={(event) => setEntryForm({ ...entryForm, category: event.target.value as Category })}><option>Maintenance</option><option>Repair</option><option>Improvement</option><option>Issue</option></select></label></div><label>Title<input required value={entryForm.title} onChange={(event) => setEntryForm({ ...entryForm, title: event.target.value })} placeholder="e.g. Boiler service, roof repair, loft conversion" /></label><label>What happened? What was done?<textarea required rows={4} value={entryForm.description} onChange={(event) => setEntryForm({ ...entryForm, description: event.target.value })} placeholder="Add the useful detail..." /></label><div className="pj-form-grid"><label>Cost (£)<input type="number" min="0" step="0.01" value={entryForm.cost ?? ''} onChange={(event) => setEntryForm({ ...entryForm, cost: event.target.value ? Number(event.target.value) : null })} placeholder="Optional" /></label><label className="pj-check"><input type="checkbox" checked={entryForm.receipt} onChange={(event) => setEntryForm({ ...entryForm, receipt: event.target.checked })} /> Receipt or professional certificate attached</label></div><label className="pj-upload"><Upload size={15} /> Add photo (optional)<input type="file" accept="image/*" onChange={handlePhotoUpload} /></label>{photoPreview && <img className="pj-photo-preview" src={photoPreview} alt="Selected property work" />}<div className="pj-form-actions"><button type="button" className="pj-outline" onClick={() => { setShowEntryForm(false); setPhotoFile(null); setPhotoPreview(null); }}>Cancel</button><button type="submit" className="pj-primary" disabled={busy}>{busy ? 'Saving…' : 'Save entry'}</button></div></form>}
+            <div className="pj-log-head"><div><p className="pj-kicker">The record</p><h2>Maintenance journal</h2></div>{!selectedLocked && <button className="pj-primary" onClick={() => setShowEntryForm((open) => !open)}><Plus size={17} /> Log new entry</button>}</div>
+            {showEntryForm && !selectedLocked && <form className="pj-entry-form" onSubmit={addEntry}><div className="pj-form-grid"><label>Date<input type="date" value={entryForm.date} onChange={(event) => setEntryForm({ ...entryForm, date: event.target.value })} /></label><label>Category<select value={entryForm.category} onChange={(event) => setEntryForm({ ...entryForm, category: event.target.value as Category })}><option>Maintenance</option><option>Repair</option><option>Improvement</option><option>Issue</option></select></label></div><label>Title<input required value={entryForm.title} onChange={(event) => setEntryForm({ ...entryForm, title: event.target.value })} placeholder="e.g. Boiler service, roof repair, loft conversion" /></label><label>What happened? What was done?<textarea required rows={4} value={entryForm.description} onChange={(event) => setEntryForm({ ...entryForm, description: event.target.value })} placeholder="Add the useful detail..." /></label><div className="pj-form-grid"><label>Cost (£)<input type="number" min="0" step="0.01" value={entryForm.cost ?? ''} onChange={(event) => setEntryForm({ ...entryForm, cost: event.target.value ? Number(event.target.value) : null })} placeholder="Optional" /></label><label className="pj-check"><input type="checkbox" checked={entryForm.receipt} onChange={(event) => setEntryForm({ ...entryForm, receipt: event.target.checked })} /> Receipt or professional certificate attached</label></div><label className="pj-upload"><Upload size={15} /> Add photo (optional)<input type="file" accept="image/*" onChange={handlePhotoUpload} /></label>{photoPreview && <img className="pj-photo-preview" src={photoPreview} alt="Selected property work" />}<div className="pj-form-actions"><button type="button" className="pj-outline" onClick={() => { setShowEntryForm(false); setPhotoFile(null); setPhotoPreview(null); }}>Cancel</button><button type="submit" className="pj-primary" disabled={busy}>{busy ? 'Saving…' : 'Save entry'}</button></div></form>}
             <div className="pj-filters"><div className="pj-search"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this journal..." />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as 'All' | Category)}><option>All</option><option>Maintenance</option><option>Repair</option><option>Improvement</option><option>Issue</option></select></div>
-            {!filteredEntries.length ? <div className="pj-empty-main"><FileText size={25} /><strong>No entries match your filters.</strong><span>Log the first detail worth keeping.</span></div> : <div className="pj-entries">{filteredEntries.map((entry) => { const impact = calculateImpactScore(entry); return <article className="pj-entry" key={entry.id}><div className="pj-entry-top"><div><p className="pj-kicker">{entry.date} · {entry.category}</p><h3>{entry.title}</h3></div><div className="pj-entry-controls"><span className={`pj-impact pj-impact-${entry.category.toLowerCase()}`}>{impact.impact}</span><button onClick={() => deleteEntry(entry.id)} aria-label={`Delete ${entry.title}`}><Trash2 size={15} /></button></div></div><p className="pj-description">{entry.description}</p>{entry.cost !== null && <p className="pj-cost">Cost: £{entry.cost.toFixed(2)}</p>}{entry.receipt && <p className="pj-receipt">✓ Receipt attached</p>}{entry.photoPath && <EntryPhoto path={entry.photoPath} alt={`${entry.title} record`} className="pj-entry-photo" />}<div className="pj-valuation"><span>Valuation impact</span><strong>{impact.value}</strong></div></article>; })}</div>}
+            {!filteredEntries.length ? <div className="pj-empty-main"><FileText size={25} /><strong>No entries match your filters.</strong><span>Log the first detail worth keeping.</span></div> : <div className="pj-entries">{filteredEntries.map((entry) => { const impact = calculateImpactScore(entry); return <article className="pj-entry" key={entry.id}><div className="pj-entry-top"><div><p className="pj-kicker">{entry.date} · {entry.category}</p><h3>{entry.title}</h3></div><div className="pj-entry-controls"><span className={`pj-impact pj-impact-${entry.category.toLowerCase()}`}>{impact.impact}</span>{!selectedLocked && <button onClick={() => deleteEntry(entry.id)} aria-label={`Delete ${entry.title}`}><Trash2 size={15} /></button>}</div></div><p className="pj-description">{entry.description}</p>{entry.cost !== null && <p className="pj-cost">Cost: £{entry.cost.toFixed(2)}</p>}{entry.receipt && <p className="pj-receipt">✓ Receipt attached</p>}{entry.photoPath && <EntryPhoto path={entry.photoPath} alt={`${entry.title} record`} className="pj-entry-photo" />}<div className="pj-valuation"><span>Valuation impact</span><strong>{impact.value}</strong></div></article>; })}</div>}
           </>}
         </main>
       </div>
