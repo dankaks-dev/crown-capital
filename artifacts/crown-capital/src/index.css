@@ -283,3 +283,24 @@ footer { display: flex; justify-content: space-between; padding: 47px 0 5px; col
 .hv-auth-switch:hover { text-decoration: underline; }
 .hv-auth-message { margin: 18px 0 0; padding: 10px 12px; border-radius: 4px; background: #f0f7f2; color: #3d7164; font-size: 11px; line-height: 1.5; }
 .hv-auth-foot { margin: 26px 0 0; padding-top: 18px; border-top: 1px solid #e8eeea; color: #9baaa3; font: 9px 'Space Mono', monospace; letter-spacing: .1em; text-transform: uppercase; text-align: center; }
+.hv-upgrade { padding: 26px 0 10px; }
+.hv-upgrade-head { margin-bottom: 20px; }
+.hv-upgrade-head h2 { margin: 9px 0 6px; font: 400 29px 'DM Serif Display', serif; color: #243735; }
+.hv-upgrade-head p { margin: 0; color: #74827c; font-size: 13px; line-height: 1.6; }
+.hv-plans { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.hv-plan { padding: 24px; border: 1px solid #e1e8e3; border-radius: 5px; background: #fff; }
+.hv-plan-featured { border-color: #28635d; }
+.hv-plan-name { color: #28635d; font: 700 9px 'Space Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+.hv-plan-price { display: flex; align-items: baseline; gap: 7px; margin: 14px 0 4px; }
+.hv-plan-price strong { font: 400 38px 'DM Serif Display', serif; color: #243735; }
+.hv-plan-price span { color: #74827c; font-size: 11px; }
+.hv-plan p { margin: 0 0 18px; color: #74827c; font-size: 12px; line-height: 1.6; }
+.hv-plan button { width: 100%; padding: 12px; border: 0; border-radius: 4px; background: #28635d; color: #fff; font: 600 12px 'DM Sans', sans-serif; cursor: pointer; }
+.hv-plan button:hover:not(:disabled) { background: #1e4e49; }
+.hv-plan button:disabled { opacity: .5; cursor: default; }
+.hv-plan-outline button { border: 1px solid #c2d0c8; background: #fff; color: #38635b; }
+.hv-limit-note { margin: 14px 0 0; padding: 12px 14px; border-radius: 4px; background: #fbf0dd; color: #8a6428; font-size: 11px; line-height: 1.6; }
+.hv-locked { opacity: .55; }
+.hv-locked-tag { display: inline-block; margin-left: 8px; padding: 3px 7px; border-radius: 3px; background: #f0ece4; color: #8a7a5c; font-size: 9px; font-weight: 700; }
+.hv-tier-badge { padding: 5px 9px; border-radius: 3px; background: #e4eee8; color: #28635d; font: 700 9px 'Space Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
+@media (max-width: 760px) { .hv-plans { grid-template-columns: 1fr; } }
