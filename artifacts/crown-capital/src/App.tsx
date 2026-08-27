@@ -198,6 +198,19 @@ function App() {
       .select('id, property_id, title, description, category, cost, entry_date, receipt, photo_path')
       .order('entry_date', { ascending: false });
     if (entryError) { setError(entryError.message); return; }
+        const { data: docRows } = await supabase
+      .from('documents')
+      .select('id, property_id, title, doc_type, issue_date, expiry_date, storage_path')
+      .order('created_at', { ascending: false });
+    setDocuments((docRows ?? []).map((d) => ({
+      id: d.id,
+      propertyId: d.property_id,
+      title: d.title,
+      docType: d.doc_type,
+      issueDate: d.issue_date,
+      expiryDate: d.expiry_date,
+      storagePath: d.storage_path,
+    })) as (VaultDocument & { propertyId: string })[]);
     setProperties((rows ?? []).map((row) => ({
       id: row.id,
       name: row.address,
