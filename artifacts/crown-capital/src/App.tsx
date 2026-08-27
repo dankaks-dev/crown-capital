@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Printer, Upload, X, Building2, FileText, LogOut, Lock } from 'lucide-react';
+import { Plus, Trash2, Printer, Upload, X, Building2, FileText, LogOut, Lock, Home, Download } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import Landing from '@/components/Landing';
 import ComplianceVault, { expiryStatus } from '@/components/ComplianceVault';
 import type { VaultDocument } from '@/components/ComplianceVault';
+import ValueProjector from '@/components/ValueProjector';
+import { computeValuation } from '@/lib/valuation';
+import type { Rule, ValuationItem } from '@/lib/valuation';
+import { buildDossier } from '@/lib/dossier';
 
 type Category = 'Maintenance' | 'Repair' | 'Improvement' | 'Issue';
 type Tier = 'free' | 'pro' | 'portfolio';
@@ -17,6 +21,9 @@ type Entry = {
   cost: number | null;
   receipt: boolean;
   photoPath: string | null;
+  improvementType: string | null;
+  isCapex: boolean;
+  status: string;
 };
 type Property = {
   id: string;
@@ -24,6 +31,9 @@ type Property = {
   entries: Entry[];
   currentValue: number | null;
   createdDate: string;
+  epcRating: string | null;
+  boilerYear: number | null;
+  roofNote: string | null;
 };
 
 const LIMITS: Record<Tier, number> = { free: 1, pro: 3, portfolio: Infinity };
@@ -36,18 +46,12 @@ const emptyEntry = () => ({
   category: 'Maintenance' as Category,
   cost: null as number | null,
   receipt: false,
+  improvementType: '',
+  isCapex: false,
 });
 
 function calculateImpactScore(entry: Entry) {
   const cost = entry.cost || 0;
-  const title = entry.title.toLowerCase();
-  if (entry.category === 'Improvement') {
-    if (title.includes('loft')) return { impact: '+15–25%', value: '£52,500–£87,500' };
-    if (title.includes('extension')) return { impact: '+10–20%', value: '£35,000–£70,000' };
-    if (title.includes('bathroom')) return { impact: '+5–8%', value: '£17,500–£28,000' };
-    if (title.includes('solar') || title.includes('heat pump')) return { impact: '+3–5%', value: '£10,500–£17,500' };
-    return { impact: '+3–8%', value: '£10,500–£28,000' };
-  }
   if (entry.category === 'Repair') {
     if (entry.receipt && cost > 0) return { impact: 'Protected', value: `£${(cost * 2.5).toFixed(0)} risk mitigation` };
     return { impact: 'Pending', value: 'Awaiting receipt' };
@@ -55,8 +59,8 @@ function calculateImpactScore(entry: Entry) {
   if (entry.category === 'Maintenance') return entry.receipt
     ? { impact: 'Protected', value: '£1,500 professional log' }
     : { impact: 'Logged', value: 'Add receipt to confirm' };
-  if (entry.category === 'Issue') return { impact: '−5–15%', value: '£17,500–£52,500 risk' };
-  return { impact: '—', value: '—' };
+  if (entry.category === 'Issue') return { impact: 'Risk', value: 'See value projector' };
+  return { impact: entry.improvementType ? 'Counted' : 'Uncategorised', value: entry.improvementType ? 'In value projector' : 'Pick an improvement type' };
 }
 
 function EntryPhoto({ path, alt, className }: { path: string; alt: string; className: string }) {
@@ -165,9 +169,12 @@ function App() {
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
+  const [rules, setRules] = useState<Record<string, Rule>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [showEntryForm, setShowEntryForm] = useState(false);
+  const [showBigThree, setShowBigThree] = useState(false);
+  const [bigThree, setBigThree] = useState({ epcRating: '', boilerYear: '', roofNote: '' });
   const [propertyName, setPropertyName] = useState('');
   const [entryForm, setEntryForm] = useState(emptyEntry);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -189,16 +196,34 @@ function App() {
     else setTier('free');
   };
 
+  const loadRules = async () => {
+    const { data } = await supabase.from('valuation_rules')
+      .select('id, label, logic_type, behavior, low, high, active');
+    const map: Record<string, Rule> = {};
+    for (const row of data ?? []) {
+      if (row.active === false) continue;
+      map[row.id] = {
+        id: row.id,
+        label: row.label,
+        logicType: row.logic_type,
+        behavior: row.behavior,
+        low: Number(row.low),
+        high: Number(row.high),
+      };
+    }
+    setRules(map);
+  };
+
   const loadData = async () => {
     const { data: rows, error: propertyError } = await supabase
-      .from('properties').select('id, address, baseline_value, created_at').order('created_at');
+      .from('properties').select('id, address, baseline_value, created_at, epc_rating, boiler_year, roof_note').order('created_at');
     if (propertyError) { setError(propertyError.message); return; }
     const { data: entryRows, error: entryError } = await supabase
       .from('log_entries')
-      .select('id, property_id, title, description, category, cost, entry_date, receipt, photo_path')
+      .select('id, property_id, title, description, category, cost, entry_date, receipt, photo_path, improvement_type, is_capex, status')
       .order('entry_date', { ascending: false });
     if (entryError) { setError(entryError.message); return; }
-        const { data: docRows } = await supabase
+    const { data: docRows } = await supabase
       .from('documents')
       .select('id, property_id, title, doc_type, issue_date, expiry_date, storage_path')
       .order('created_at', { ascending: false });
@@ -216,6 +241,9 @@ function App() {
       name: row.address,
       currentValue: row.baseline_value,
       createdDate: row.created_at,
+      epcRating: row.epc_rating,
+      boilerYear: row.boiler_year,
+      roofNote: row.roof_note,
       entries: (entryRows ?? []).filter((entry) => entry.property_id === row.id).map((entry) => ({
         id: entry.id,
         date: entry.entry_date,
@@ -225,12 +253,15 @@ function App() {
         cost: entry.cost,
         receipt: entry.receipt,
         photoPath: entry.photo_path,
+        improvementType: entry.improvement_type,
+        isCapex: entry.is_capex,
+        status: entry.status,
       })),
     })));
   };
 
   useEffect(() => {
-    if (session) { loadTier(); loadData(); }
+    if (session) { loadTier(); loadRules(); loadData(); }
     else { setProperties([]); setSelectedId(null); setTier('free'); setDocuments([]); }
   }, [session]);
 
@@ -273,6 +304,25 @@ function App() {
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [selectedProperty, categoryFilter, search]);
 
+  const valuationItems: ValuationItem[] = useMemo(() => {
+    if (!selectedProperty) return [];
+    return selectedProperty.entries
+      .filter((e) => e.improvementType)
+      .map((e) => ({
+        id: e.id,
+        improvementType: e.improvementType as string,
+        date: e.date,
+        status: e.status,
+        cost: e.cost,
+        title: e.title,
+      }));
+  }, [selectedProperty]);
+
+  const valuation = useMemo(() => {
+    if (!selectedProperty || selectedProperty.currentValue === null) return null;
+    return computeValuation(selectedProperty.currentValue, valuationItems, rules);
+  }, [selectedProperty, valuationItems, rules]);
+
   const startCheckout = async (plan: 'pro' | 'portfolio') => {
     setBusyPlan(plan);
     setError(null);
@@ -306,19 +356,69 @@ function App() {
     setBusy(true);
     const { data, error: insertError } = await supabase.from('properties')
       .insert({ user_id: session.user.id, address: name })
-      .select('id, address, baseline_value, created_at').single();
+      .select('id, address, baseline_value, created_at, epc_rating, boiler_year, roof_note').single();
     setBusy(false);
     if (insertError || !data) { setError(insertError?.message ?? 'Could not create property.'); return; }
-    setProperties((current) => [...current, { id: data.id, name: data.address, entries: [], currentValue: data.baseline_value, createdDate: data.created_at }]);
+    setProperties((current) => [...current, {
+      id: data.id, name: data.address, entries: [], currentValue: data.baseline_value,
+      createdDate: data.created_at, epcRating: data.epc_rating, boilerYear: data.boiler_year, roofNote: data.roof_note,
+    }]);
     setSelectedId(data.id);
     setPropertyName('');
     setShowPropertyForm(false);
+  };
+
+  const saveBaseline = async (value: number) => {
+    if (!selectedProperty) return;
+    const newValue = value > 0 ? value : null;
+    const { error: updateError } = await supabase.from('properties')
+      .update({ baseline_value: newValue }).eq('id', selectedProperty.id);
+    if (updateError) { setError(updateError.message); return; }
+    setProperties((c) => c.map((p) => p.id === selectedProperty.id ? { ...p, currentValue: newValue } : p));
+  };
+
+  const saveBigThree = async () => {
+    if (!selectedProperty) return;
+    const payload = {
+      epc_rating: bigThree.epcRating || null,
+      boiler_year: bigThree.boilerYear ? Number(bigThree.boilerYear) : null,
+      roof_note: bigThree.roofNote || null,
+    };
+    const { error: updateError } = await supabase.from('properties').update(payload).eq('id', selectedProperty.id);
+    if (updateError) { setError(updateError.message); return; }
+    setProperties((c) => c.map((p) => p.id === selectedProperty.id
+      ? { ...p, epcRating: payload.epc_rating, boilerYear: payload.boiler_year, roofNote: payload.roof_note } : p));
+    setShowBigThree(false);
+  };
+
+  const openBigThree = () => {
+    if (!selectedProperty) return;
+    setBigThree({
+      epcRating: selectedProperty.epcRating || '',
+      boilerYear: selectedProperty.boilerYear ? String(selectedProperty.boilerYear) : '',
+      roofNote: selectedProperty.roofNote || '',
+    });
+    setShowBigThree(true);
+  };
+
+  const resolveEntry = async (entryId: string) => {
+    const { error: updateError } = await supabase.from('log_entries').update({ status: 'resolved' }).eq('id', entryId);
+    if (updateError) { setError(updateError.message); return; }
+    setProperties((c) => c.map((p) => ({
+      ...p, entries: p.entries.map((e) => e.id === entryId ? { ...e, status: 'resolved' } : e),
+    })));
   };
 
   const addEntry = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedProperty || !session || selectedLocked) return;
     if (!entryForm.title.trim() || !entryForm.description.trim()) return;
+
+    const rule = entryForm.improvementType ? rules[entryForm.improvementType] : null;
+    if (rule && (rule.logicType === 'PROPORTIONAL_DEVALUATION' || rule.logicType === 'FIXED_DEVALUATION')) {
+      if (!window.confirm(`Market alert: "${rule.label}" typically reduces value. Are you sure you want to log this?`)) return;
+    }
+
     setBusy(true);
     let photoPath: string | null = null;
     if (photoFile) {
@@ -338,12 +438,15 @@ function App() {
       entry_date: entryForm.date,
       receipt: entryForm.receipt,
       photo_path: photoPath,
-    }).select('id, entry_date, title, description, category, cost, receipt, photo_path').single();
+      improvement_type: entryForm.improvementType || null,
+      is_capex: entryForm.isCapex,
+    }).select('id, entry_date, title, description, category, cost, receipt, photo_path, improvement_type, is_capex, status').single();
     setBusy(false);
     if (insertError || !data) { setError(insertError?.message ?? 'Could not save entry.'); return; }
     const entry: Entry = {
       id: data.id, date: data.entry_date, title: data.title, description: data.description ?? '',
       category: data.category as Category, cost: data.cost, receipt: data.receipt, photoPath: data.photo_path,
+      improvementType: data.improvement_type, isCapex: data.is_capex, status: data.status,
     };
     setProperties((current) => current.map((property) => property.id === selectedProperty.id
       ? { ...property, entries: [entry, ...property.entries] } : property));
@@ -380,18 +483,46 @@ function App() {
     reader.readAsDataURL(file);
   };
 
+  const generateDossier = () => {
+    if (!selectedProperty) return;
+    const docsForProperty = (documents as (VaultDocument & { propertyId: string })[])
+      .filter((d) => d.propertyId === selectedProperty.id);
+    const html = buildDossier({
+      propertyName: selectedProperty.name,
+      baseline: selectedProperty.currentValue,
+      estimatedValue: valuation ? valuation.mid.finalValue : null,
+      epcRating: selectedProperty.epcRating,
+      boilerYear: selectedProperty.boilerYear,
+      roofNote: selectedProperty.roofNote,
+      entries: selectedProperty.entries.map((e) => ({
+        date: e.date, title: e.title, description: e.description,
+        category: e.category, cost: e.cost, receipt: e.receipt, isCapex: e.isCapex,
+      })),
+      documents: docsForProperty.map((d) => ({
+        title: d.title, docType: d.docType, issueDate: d.issueDate, expiryDate: d.expiryDate,
+      })),
+    });
+    const win = window.open('', '', 'height=900,width=900');
+    if (!win) { setError('Allow pop-ups to generate the dossier.'); return; }
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 350);
+  };
+
   const printJournal = () => {
     if (!selectedProperty) return;
     const entryMarkup = [...selectedProperty.entries].sort((a, b) => b.date.localeCompare(a.date)).map((entry) => {
       const impact = calculateImpactScore(entry);
-      return `<article class="entry"><div class="entry-head"><div><h3>${entry.title}</h3><p>${entry.date} · ${entry.category}</p></div><strong>${impact.impact}</strong></div><p>${entry.description}</p>${entry.cost ? `<p><b>Cost:</b> £${entry.cost.toFixed(2)}</p>` : ''}${entry.receipt ? '<p class="green">✓ Receipt attached</p>' : ''}<div class="valuation"><b>Valuation impact:</b> ${impact.value}</div></article>`;
+      return `<article class="entry"><div class="entry-head"><div><h3>${entry.title}</h3><p>${entry.date} · ${entry.category}</p></div><strong>${impact.impact}</strong></div><p>${entry.description}</p>${entry.cost ? `<p><b>Cost:</b> £${entry.cost.toFixed(2)}</p>` : ''}${entry.receipt ? '<p class="green">✓ Receipt attached</p>' : ''}</article>`;
     }).join('');
     const printWindow = window.open('', '', 'height=800,width=900');
     if (!printWindow) return;
-    printWindow.document.write(`<!doctype html><html><head><title>${selectedProperty.name} · Maintenance Journal</title><style>body{font-family:Arial,sans-serif;margin:40px;color:#273b38}h1{margin:0 0 6px}.meta{color:#65746f;border-bottom:2px solid #e5ebe7;padding-bottom:20px}.entry{page-break-inside:avoid;border:1px solid #dce5df;padding:20px;margin:15px 0;border-radius:8px}.entry-head{display:flex;justify-content:space-between;gap:20px}.entry h3{margin:0 0 5px}.entry p{line-height:1.55}.entry-head p{margin:0;color:#71807a;font-size:13px}.entry-head strong{background:#e3f0e9;padding:7px 10px;border-radius:4px;color:#3d7460;white-space:nowrap}.valuation{padding:10px;background:#f2f6f3;border-radius:4px}.green{color:#258157}</style></head><body><h1>${selectedProperty.name}</h1><p class="meta">Maintenance Journal · Printed ${new Date().toLocaleDateString('en-GB')} · ${selectedProperty.entries.length} entries</p>${entryMarkup || '<p>No entries recorded.</p>'}</body></html>`);
+    printWindow.document.write(`<!doctype html><html><head><title>${selectedProperty.name} · Maintenance Journal</title><style>body{font-family:Arial,sans-serif;margin:40px;color:#273b38}h1{margin:0 0 6px}.meta{color:#65746f;border-bottom:2px solid #e5ebe7;padding-bottom:20px}.entry{page-break-inside:avoid;border:1px solid #dce5df;padding:20px;margin:15px 0;border-radius:8px}.entry-head{display:flex;justify-content:space-between;gap:20px}.entry h3{margin:0 0 5px}.entry p{line-height:1.55}.entry-head p{margin:0;color:#71807a;font-size:13px}.entry-head strong{background:#e3f0e9;padding:7px 10px;border-radius:4px;color:#3d7460;white-space:nowrap}.green{color:#258157}</style></head><body><h1>${selectedProperty.name}</h1><p class="meta">Maintenance Journal · Printed ${new Date().toLocaleDateString('en-GB')} · ${selectedProperty.entries.length} entries</p>${entryMarkup || '<p>No entries recorded.</p>'}</body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 250);
   };
+
+  const ruleOptions = useMemo(() => Object.values(rules).sort((a, b) => a.label.localeCompare(b.label)), [rules]);
 
   if (!authReady) return null;
   if (!session) return showAuth
@@ -400,7 +531,18 @@ function App() {
 
   return (
     <div className="property-journal">
-      <header className="pj-header"><div className="pj-brand"><span className="pj-crown">H</span><div><strong>HomeVault</strong><small>Property maintenance &amp; valuation log</small></div></div><div className="pj-header-actions"><span className="hv-tier-badge">{TIER_LABEL[tier]}</span>{tier !== 'portfolio' && <button className="pj-outline" onClick={() => setShowUpgrade((open) => !open)}>Upgrade</button>}<button className="pj-outline" onClick={() => supabase.auth.signOut()}><LogOut size={14} /> Sign out</button></div></header>
+      <header className="pj-header">
+        <button className="pj-brand" style={{ border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left' }} onClick={() => { setSelectedId(null); setShowUpgrade(false); }}>
+          <span className="pj-crown">H</span>
+          <div><strong>HomeVault</strong><small>Property maintenance &amp; valuation log</small></div>
+        </button>
+        <div className="pj-header-actions">
+          {selectedId && <button className="pj-outline" onClick={() => { setSelectedId(null); setShowUpgrade(false); }}><Home size={14} /> All properties</button>}
+          <span className="hv-tier-badge">{TIER_LABEL[tier]}</span>
+          {tier !== 'portfolio' && <button className="pj-outline" onClick={() => setShowUpgrade((open) => !open)}>Upgrade</button>}
+          <button className="pj-outline" onClick={() => supabase.auth.signOut()}><LogOut size={14} /> Sign out</button>
+        </div>
+      </header>
       {error && <div className="pj-inline-form"><span>{error}</span><button className="pj-outline" onClick={() => setError(null)}>Dismiss</button></div>}
       <div className="pj-layout">
         <aside className="pj-sidebar">
@@ -414,7 +556,7 @@ function App() {
         <main className="pj-main">
           {showUpgrade && <UpgradePanel tier={tier} onCheckout={startCheckout} busyPlan={busyPlan} />}
           {!selectedProperty ? <div className="pj-welcome"><div className="pj-welcome-icon"><FileText size={27} /></div><p className="pj-kicker">HomeVault / Field notes</p><h1>Keep a record of<br /><em>what makes a home.</em></h1><p className="pj-lead">Track the care, improvements, and decisions that protect the value of your property portfolio.</p><button className="pj-primary" onClick={openPropertyForm}><Plus size={17} /> Add your first property</button></div> : <>
-            <div className="pj-property-head"><div><p className="pj-kicker">Selected property</p><h1>{selectedProperty.name}</h1><p className="pj-muted">{selectedProperty.entries.length} log entries · {selectedProperty.currentValue !== null ? `Current value £${selectedProperty.currentValue.toLocaleString('en-GB')}` : 'Add your property value'}</p></div><div className="pj-actions"><button className="pj-outline" onClick={printJournal}><Printer size={16} /> Print</button><button className="pj-danger" onClick={() => deleteProperty(selectedProperty.id)}><Trash2 size={16} /> Delete</button></div></div>
+            <div className="pj-property-head"><div><p className="pj-kicker">Selected property</p><h1>{selectedProperty.name}</h1><p className="pj-muted">{selectedProperty.entries.length} log entries · {selectedProperty.currentValue !== null ? `Baseline £${selectedProperty.currentValue.toLocaleString('en-GB')}` : 'Add your property value'}</p></div><div className="pj-actions"><button className="pj-outline" onClick={generateDossier}><Download size={16} /> Dossier</button><button className="pj-outline" onClick={printJournal}><Printer size={16} /> Print</button><button className="pj-danger" onClick={() => deleteProperty(selectedProperty.id)}><Trash2 size={16} /> Delete</button></div></div>
             {selectedLocked && <p className="hv-limit-note"><Lock size={12} /> This property is read only on your current plan. Upgrade to log new entries.</p>}
             {(() => {
               const due = (documents as (VaultDocument & { propertyId: string })[])
@@ -425,10 +567,77 @@ function App() {
               return <p className="hv-expiry-banner"><strong>Documents needing attention</strong>{due.map((x) => `${x.doc.title} — ${x.status.label}`).join(' · ')}</p>;
             })()}
             <div className="pj-summary"><div><span>Total entries</span><strong>{selectedProperty.entries.length}</strong></div><div><span>Improvements</span><strong>{selectedProperty.entries.filter((entry) => entry.category === 'Improvement').length}</strong></div><div><span>Receipts attached</span><strong>{selectedProperty.entries.filter((entry) => entry.receipt).length}</strong></div><div><span>Last updated</span><strong>{selectedProperty.entries[0]?.date || '—'}</strong></div></div>
+
+            <div className="hv-vault">
+              <div className="hv-vault-head">
+                <div><p className="pj-kicker">Critical assets</p><h2>The big three</h2></div>
+                {!selectedLocked && <button className="pj-outline" onClick={openBigThree}>Edit</button>}
+              </div>
+              {showBigThree ? (
+                <div className="hv-doc-form">
+                  <div className="hv-doc-grid">
+                    <label>EPC rating
+                      <select value={bigThree.epcRating} onChange={(e) => setBigThree({ ...bigThree, epcRating: e.target.value })}>
+                        <option value="">Not recorded</option>
+                        {['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((g) => <option key={g}>{g}</option>)}
+                      </select>
+                    </label>
+                    <label>Boiler year installed
+                      <input type="number" min="1950" max="2100" value={bigThree.boilerYear} onChange={(e) => setBigThree({ ...bigThree, boilerYear: e.target.value })} placeholder="e.g. 2018" />
+                    </label>
+                  </div>
+                  <label>Roof age / condition
+                    <input value={bigThree.roofNote} onChange={(e) => setBigThree({ ...bigThree, roofNote: e.target.value })} placeholder="e.g. Replaced 2015, good condition" />
+                  </label>
+                  <div className="pj-form-actions">
+                    <button className="pj-outline" onClick={() => setShowBigThree(false)}>Cancel</button>
+                    <button className="pj-primary" onClick={saveBigThree}>Save</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="pj-summary">
+                  <div><span>EPC rating</span><strong>{selectedProperty.epcRating || '—'}</strong></div>
+                  <div><span>Boiler installed</span><strong>{selectedProperty.boilerYear || '—'}</strong></div>
+                  <div><span>Roof</span><strong style={{ fontSize: 15 }}>{selectedProperty.roofNote || '—'}</strong></div>
+                  <div><span>Capital spend</span><strong>£{selectedProperty.entries.filter((e) => e.isCapex).reduce((s, e) => s + (e.cost || 0), 0).toLocaleString('en-GB')}</strong></div>
+                </div>
+              )}
+            </div>
+
+            <ValueProjector
+              baseline={selectedProperty.currentValue}
+              items={valuationItems}
+              rules={rules}
+              onSaveBaseline={saveBaseline}
+              onResolve={resolveEntry}
+              readOnly={selectedLocked}
+            />
+
             <div className="pj-log-head"><div><p className="pj-kicker">The record</p><h2>Maintenance journal</h2></div>{!selectedLocked && <button className="pj-primary" onClick={() => setShowEntryForm((open) => !open)}><Plus size={17} /> Log new entry</button>}</div>
-            {showEntryForm && !selectedLocked && <form className="pj-entry-form" onSubmit={addEntry}><div className="pj-form-grid"><label>Date<input type="date" value={entryForm.date} onChange={(event) => setEntryForm({ ...entryForm, date: event.target.value })} /></label><label>Category<select value={entryForm.category} onChange={(event) => setEntryForm({ ...entryForm, category: event.target.value as Category })}><option>Maintenance</option><option>Repair</option><option>Improvement</option><option>Issue</option></select></label></div><label>Title<input required value={entryForm.title} onChange={(event) => setEntryForm({ ...entryForm, title: event.target.value })} placeholder="e.g. Boiler service, roof repair, loft conversion" /></label><label>What happened? What was done?<textarea required rows={4} value={entryForm.description} onChange={(event) => setEntryForm({ ...entryForm, description: event.target.value })} placeholder="Add the useful detail..." /></label><div className="pj-form-grid"><label>Cost (£)<input type="number" min="0" step="0.01" value={entryForm.cost ?? ''} onChange={(event) => setEntryForm({ ...entryForm, cost: event.target.value ? Number(event.target.value) : null })} placeholder="Optional" /></label><label className="pj-check"><input type="checkbox" checked={entryForm.receipt} onChange={(event) => setEntryForm({ ...entryForm, receipt: event.target.checked })} /> Receipt or professional certificate attached</label></div><label className="pj-upload"><Upload size={15} /> Add photo (optional)<input type="file" accept="image/*" onChange={handlePhotoUpload} /></label>{photoPreview && <img className="pj-photo-preview" src={photoPreview} alt="Selected property work" />}<div className="pj-form-actions"><button type="button" className="pj-outline" onClick={() => { setShowEntryForm(false); setPhotoFile(null); setPhotoPreview(null); }}>Cancel</button><button type="submit" className="pj-primary" disabled={busy}>{busy ? 'Saving…' : 'Save entry'}</button></div></form>}
+            {showEntryForm && !selectedLocked && <form className="pj-entry-form" onSubmit={addEntry}>
+              <div className="pj-form-grid">
+                <label>Date<input type="date" value={entryForm.date} onChange={(event) => setEntryForm({ ...entryForm, date: event.target.value })} /></label>
+                <label>Category<select value={entryForm.category} onChange={(event) => setEntryForm({ ...entryForm, category: event.target.value as Category })}><option>Maintenance</option><option>Repair</option><option>Improvement</option><option>Issue</option></select></label>
+              </div>
+              <label>Title<input required value={entryForm.title} onChange={(event) => setEntryForm({ ...entryForm, title: event.target.value })} placeholder="e.g. Boiler service, roof repair, loft conversion" /></label>
+              <label>What happened? What was done?<textarea required rows={4} value={entryForm.description} onChange={(event) => setEntryForm({ ...entryForm, description: event.target.value })} placeholder="Add the useful detail..." /></label>
+              <label>Improvement type (counts towards your value projection)
+                <select value={entryForm.improvementType} onChange={(event) => setEntryForm({ ...entryForm, improvementType: event.target.value })}>
+                  <option value="">Not applicable</option>
+                  {ruleOptions.map((rule) => <option key={rule.id} value={rule.id}>{rule.label}</option>)}
+                </select>
+              </label>
+              <div className="pj-form-grid">
+                <label>Cost (£)<input type="number" min="0" step="0.01" value={entryForm.cost ?? ''} onChange={(event) => setEntryForm({ ...entryForm, cost: event.target.value ? Number(event.target.value) : null })} placeholder="Optional" /></label>
+                <label className="pj-check"><input type="checkbox" checked={entryForm.receipt} onChange={(event) => setEntryForm({ ...entryForm, receipt: event.target.checked })} /> Receipt or certificate attached</label>
+              </div>
+              <label className="pj-check"><input type="checkbox" checked={entryForm.isCapex} onChange={(event) => setEntryForm({ ...entryForm, isCapex: event.target.checked })} /> This is an improvement (capital), not a repair</label>
+              <label className="pj-upload"><Upload size={15} /> Add photo (optional)<input type="file" accept="image/*" onChange={handlePhotoUpload} /></label>
+              {photoPreview && <img className="pj-photo-preview" src={photoPreview} alt="Selected property work" />}
+              <div className="pj-form-actions"><button type="button" className="pj-outline" onClick={() => { setShowEntryForm(false); setPhotoFile(null); setPhotoPreview(null); }}>Cancel</button><button type="submit" className="pj-primary" disabled={busy}>{busy ? 'Saving…' : 'Save entry'}</button></div>
+            </form>}
             <div className="pj-filters"><div className="pj-search"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this journal..." />{search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}</div><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as 'All' | Category)}><option>All</option><option>Maintenance</option><option>Repair</option><option>Improvement</option><option>Issue</option></select></div>
-            {!filteredEntries.length ? <div className="pj-empty-main"><FileText size={25} /><strong>No entries match your filters.</strong><span>Log the first detail worth keeping.</span></div> : <div className="pj-entries">{filteredEntries.map((entry) => { const impact = calculateImpactScore(entry); return <article className="pj-entry" key={entry.id}><div className="pj-entry-top"><div><p className="pj-kicker">{entry.date} · {entry.category}</p><h3>{entry.title}</h3></div><div className="pj-entry-controls"><span className={`pj-impact pj-impact-${entry.category.toLowerCase()}`}>{impact.impact}</span>{!selectedLocked && <button onClick={() => deleteEntry(entry.id)} aria-label={`Delete ${entry.title}`}><Trash2 size={15} /></button>}</div></div><p className="pj-description">{entry.description}</p>{entry.cost !== null && <p className="pj-cost">Cost: £{entry.cost.toFixed(2)}</p>}{entry.receipt && <p className="pj-receipt">✓ Receipt attached</p>}{entry.photoPath && <EntryPhoto path={entry.photoPath} alt={`${entry.title} record`} className="pj-entry-photo" />}<div className="pj-valuation"><span>Valuation impact</span><strong>{impact.value}</strong></div></article>; })}</div>}
+            {!filteredEntries.length ? <div className="pj-empty-main"><FileText size={25} /><strong>No entries match your filters.</strong><span>Log the first detail worth keeping.</span></div> : <div className="pj-entries">{filteredEntries.map((entry) => { const impact = calculateImpactScore(entry); return <article className="pj-entry" key={entry.id}><div className="pj-entry-top"><div><p className="pj-kicker">{entry.date} · {entry.category}{entry.status === 'resolved' ? ' · Resolved' : ''}</p><h3>{entry.title}</h3></div><div className="pj-entry-controls"><span className={`pj-impact pj-impact-${entry.category.toLowerCase()}`}>{impact.impact}</span>{!selectedLocked && <button onClick={() => deleteEntry(entry.id)} aria-label={`Delete ${entry.title}`}><Trash2 size={15} /></button>}</div></div><p className="pj-description">{entry.description}</p>{entry.cost !== null && <p className="pj-cost">Cost: £{entry.cost.toFixed(2)}{entry.isCapex ? ' · Capital' : ''}</p>}{entry.receipt && <p className="pj-receipt">✓ Receipt attached</p>}{entry.photoPath && <EntryPhoto path={entry.photoPath} alt={`${entry.title} record`} className="pj-entry-photo" />}<div className="pj-valuation"><span>Valuation impact</span><strong>{impact.value}</strong></div></article>; })}</div>}
             <ComplianceVault
               propertyId={selectedProperty.id}
               userId={session.user.id}
@@ -445,4 +654,3 @@ function App() {
 }
 
 export default App;
-
