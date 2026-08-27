@@ -124,7 +124,7 @@ function AuthScreen() {
   );
 }
 
-function UpgradePanel({ tier, onCheckout, busyPlan }: { tier: Tier; onCheckout: (tier: 'pro' | 'portfolio') => void; busyPlan: string | null }) {
+function UpgradePanel({ tier, onCheckout, busyPlan }: { tier: Tier; onCheckout: (plan: 'pro' | 'portfolio') => void; busyPlan: string | null }) {
   return (
     <div className="hv-upgrade">
       <div className="hv-upgrade-head">
@@ -137,16 +137,16 @@ function UpgradePanel({ tier, onCheckout, busyPlan }: { tier: Tier; onCheckout: 
           <span className="hv-plan-name">HomeVault Pro</span>
           <div className="hv-plan-price"><strong>£5.99</strong><span>per month</span></div>
           <p>Up to 3 properties, full maintenance record.</p>
-          <button onClick={() => onCheckout('pro')} disabled={busy || tier === 'pro' || tier === 'portfolio'}>
-            {tier === 'pro' ? 'Current plan' : busy ? 'Please wait…' : 'Choose Pro'}
+          <button onClick={() => onCheckout('pro')} disabled={busyPlan !== null || tier === 'pro' || tier === 'portfolio'}>
+            {tier === 'pro' ? 'Current plan' : busyPlan === 'pro' ? 'Please wait…' : 'Choose Pro'}
           </button>
         </div>
         <div className={`hv-plan ${tier === 'portfolio' ? 'hv-plan-featured' : ''}`}>
           <span className="hv-plan-name">HomeVault Portfolio</span>
           <div className="hv-plan-price"><strong>£9.99</strong><span>per month</span></div>
           <p>Unlimited properties for landlords and larger portfolios.</p>
-          <button onClick={() => onCheckout('portfolio')} disabled={busy || tier === 'portfolio'}>
-            {tier === 'portfolio' ? 'Current plan' : busy ? 'Please wait…' : 'Choose Portfolio'}
+          <button onClick={() => onCheckout('portfolio')} disabled={busyPlan !== null || tier === 'portfolio'}>
+            {tier === 'portfolio' ? 'Current plan' : busyPlan === 'portfolio' ? 'Please wait…' : 'Choose Portfolio'}
           </button>
         </div>
       </div>
@@ -160,6 +160,7 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [tier, setTier] = useState<Tier>('free');
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showPropertyForm, setShowPropertyForm] = useState(false);
@@ -257,19 +258,29 @@ function App() {
   }, [selectedProperty, categoryFilter, search]);
 
   const startCheckout = async (plan: 'pro' | 'portfolio') => {
-    setBusy(true);
-    const { data: authData } = await supabase.auth.getSession();
-    const token = authData.session?.access_token;
-    if (!token) { setBusy(false); setError('Please sign in again.'); return; }
-    const response = await fetch('/api/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ tier: plan }),
-    });
-    const result = await response.json();
-    setBusy(false);
-    if (result.url) window.location.href = result.url;
-    else setError(result.error || 'Could not start checkout.');
+    setBusyPlan(plan);
+    setError(null);
+    try {
+      const { data: authData } = await supabase.auth.getSession();
+      const token = authData.session?.access_token;
+      if (!token) { setBusyPlan(null); setError('Please sign in again.'); return; }
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tier: plan }),
+      });
+      const result = await response.json();
+      if (result.url) { window.location.href = result.url; return; }
+      setError(result.error || 'Could not start checkout.');
+    } catch {
+      setError('Checkout service unavailable.');
+    }
+    setBusyPlan(null);
+  };
+
+  const openPropertyForm = () => {
+    if (atLimit) { setShowUpgrade(true); setShowPropertyForm(false); return; }
+    setShowPropertyForm((open) => !open);
   };
 
   const addProperty = async () => {
@@ -377,16 +388,16 @@ function App() {
       {error && <div className="pj-inline-form"><span>{error}</span><button className="pj-outline" onClick={() => setError(null)}>Dismiss</button></div>}
       <div className="pj-layout">
         <aside className="pj-sidebar">
-          <button className="pj-primary pj-full" onClick={() => atLimit ? setShowUpgrade(true) : setShowPropertyForm((open) => !open)}><Plus size={17} /> New property</button>
-          {showPropertyForm && !atLimit && <div className="pj-inline-form"><input autoFocus value={propertyName} onChange={(event) => setPropertyName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && addProperty()} placeholder="Property address or name" /><button className="pj-secondary pj-full" onClick={addProperty} disabled={busy}>Create property</button></div>}
+          <button className="pj-primary pj-full" onClick={openPropertyForm}><Plus size={17} /> New property</button>
+          {showPropertyForm && <div className="pj-inline-form"><input autoFocus value={propertyName} onChange={(event) => setPropertyName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && addProperty()} placeholder="Property address or name" /><button className="pj-secondary pj-full" onClick={addProperty} disabled={busy}>Create property</button></div>}
           <div className="pj-sidebar-label">Your properties</div>
           {!properties.length ? <div className="pj-empty-side"><Building2 size={20} /><span>No properties yet.</span><small>Create one to get started.</small></div> : properties.map((property) => { const locked = !unlockedIds.has(property.id); return <button className={`pj-property ${selectedId === property.id ? 'pj-property-active' : ''} ${locked ? 'hv-locked' : ''}`} key={property.id} onClick={() => setSelectedId(property.id)}><span>{property.name}{locked && <span className="hv-locked-tag">Read only</span>}</span><small>{property.entries.length} {property.entries.length === 1 ? 'entry' : 'entries'}</small></button>; })}
           <div className="pj-side-footer">Secure record<br /><span>Your data is saved to your account.</span></div>
         </aside>
 
         <main className="pj-main">
-          {showUpgrade && <UpgradePanel tier={tier} onCheckout={startCheckout} busy={busy} />}
-          {!selectedProperty ? <div className="pj-welcome"><div className="pj-welcome-icon"><FileText size={27} /></div><p className="pj-kicker">HomeVault / Field notes</p><h1>Keep a record of<br /><em>what makes a home.</em></h1><p className="pj-lead">Track the care, improvements, and decisions that protect the value of your property portfolio.</p><button className="pj-primary" onClick={() => atLimit ? setShowUpgrade(true) : setShowPropertyForm(true)}><Plus size={17} /> Add your first property</button></div> : <>
+          {showUpgrade && <UpgradePanel tier={tier} onCheckout={startCheckout} busyPlan={busyPlan} />}
+          {!selectedProperty ? <div className="pj-welcome"><div className="pj-welcome-icon"><FileText size={27} /></div><p className="pj-kicker">HomeVault / Field notes</p><h1>Keep a record of<br /><em>what makes a home.</em></h1><p className="pj-lead">Track the care, improvements, and decisions that protect the value of your property portfolio.</p><button className="pj-primary" onClick={openPropertyForm}><Plus size={17} /> Add your first property</button></div> : <>
             <div className="pj-property-head"><div><p className="pj-kicker">Selected property</p><h1>{selectedProperty.name}</h1><p className="pj-muted">{selectedProperty.entries.length} log entries · {selectedProperty.currentValue !== null ? `Current value £${selectedProperty.currentValue.toLocaleString('en-GB')}` : 'Add your property value'}</p></div><div className="pj-actions"><button className="pj-outline" onClick={printJournal}><Printer size={16} /> Print</button><button className="pj-danger" onClick={() => deleteProperty(selectedProperty.id)}><Trash2 size={16} /> Delete</button></div></div>
             {selectedLocked && <p className="hv-limit-note"><Lock size={12} /> This property is read only on your current plan. Upgrade to log new entries.</p>}
             <div className="pj-summary"><div><span>Total entries</span><strong>{selectedProperty.entries.length}</strong></div><div><span>Improvements</span><strong>{selectedProperty.entries.filter((entry) => entry.category === 'Improvement').length}</strong></div><div><span>Receipts attached</span><strong>{selectedProperty.entries.filter((entry) => entry.receipt).length}</strong></div><div><span>Last updated</span><strong>{selectedProperty.entries[0]?.date || '—'}</strong></div></div>
