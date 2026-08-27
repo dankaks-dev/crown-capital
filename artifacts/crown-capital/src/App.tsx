@@ -3,6 +3,8 @@ import { Plus, Trash2, Printer, Upload, X, Building2, FileText, LogOut, Lock } f
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import Landing from '@/components/Landing';
+import ComplianceVault, { expiryStatus } from '@/components/ComplianceVault';
+import type { VaultDocument } from '@/components/ComplianceVault';
 
 type Category = 'Maintenance' | 'Repair' | 'Improvement' | 'Issue';
 type Tier = 'free' | 'pro' | 'portfolio';
