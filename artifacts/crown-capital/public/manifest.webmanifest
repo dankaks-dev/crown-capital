@@ -1,7 +1,7 @@
 {
-  "name": "Crown & Capital Property Journal",
-  "short_name": "Fieldnote",
-  "description": "An offline-first property maintenance and valuation journal.",
+  "name": "HomeVault",
+  "short_name": "HomeVault",
+  "description": "Your property. Your records. Your proof.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f8f6",
