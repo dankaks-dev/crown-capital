@@ -164,6 +164,7 @@ function App() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [documents, setDocuments] = useState<VaultDocument[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showPropertyForm, setShowPropertyForm] = useState(false);
   const [showEntryForm, setShowEntryForm] = useState(false);
