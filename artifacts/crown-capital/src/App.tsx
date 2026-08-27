@@ -218,7 +218,7 @@ function App() {
 
   useEffect(() => {
     if (session) { loadTier(); loadData(); }
-    else { setProperties([]); setSelectedId(null); setTier('free'); }
+    else { setProperties([]); setSelectedId(null); setTier('free'); setDocuments([]); }
   }, [session]);
 
   useEffect(() => {
