@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Printer, Upload, X, Building2, FileText, LogOut } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import Landing from '@/components/Landing';
 
 type Category = 'Maintenance' | 'Repair' | 'Improvement' | 'Issue';
 type Entry = {
@@ -121,6 +122,7 @@ function AuthScreen() {
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
+  const [showAuth, setShowAuth] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -276,7 +278,9 @@ function App() {
   };
 
   if (!authReady) return null;
-  if (!session) return <AuthScreen />;
+  if (!session) return showAuth
+    ? <AuthScreen />
+    : <Landing onSignIn={() => setShowAuth(true)} onGetStarted={() => setShowAuth(true)} />;
 
   return (
     <div className="property-journal">
