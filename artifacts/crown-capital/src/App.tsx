@@ -378,7 +378,6 @@ function App() {
       <div className="pj-layout">
         <aside className="pj-sidebar">
           <button className="pj-primary pj-full" onClick={() => atLimit ? setShowUpgrade(true) : setShowPropertyForm((open) => !open)}><Plus size={17} /> New property</button>
-          {atLimit && <p className="hv-limit-note">You've reached the {TIER_LABEL[tier]} limit of {limit} {limit === 1 ? 'property' : 'properties'}. Upgrade to add more.</p>}
           {showPropertyForm && !atLimit && <div className="pj-inline-form"><input autoFocus value={propertyName} onChange={(event) => setPropertyName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && addProperty()} placeholder="Property address or name" /><button className="pj-secondary pj-full" onClick={addProperty} disabled={busy}>Create property</button></div>}
           <div className="pj-sidebar-label">Your properties</div>
           {!properties.length ? <div className="pj-empty-side"><Building2 size={20} /><span>No properties yet.</span><small>Create one to get started.</small></div> : properties.map((property) => { const locked = !unlockedIds.has(property.id); return <button className={`pj-property ${selectedId === property.id ? 'pj-property-active' : ''} ${locked ? 'hv-locked' : ''}`} key={property.id} onClick={() => setSelectedId(property.id)}><span>{property.name}{locked && <span className="hv-locked-tag">Read only</span>}</span><small>{property.entries.length} {property.entries.length === 1 ? 'entry' : 'entries'}</small></button>; })}
