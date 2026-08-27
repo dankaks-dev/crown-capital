@@ -124,7 +124,7 @@ function AuthScreen() {
   );
 }
 
-function UpgradePanel({ tier, onCheckout, busy }: { tier: Tier; onCheckout: (tier: 'pro' | 'portfolio') => void; busy: boolean }) {
+function UpgradePanel({ tier, onCheckout, busyPlan }: { tier: Tier; onCheckout: (tier: 'pro' | 'portfolio') => void; busyPlan: string | null }) {
   return (
     <div className="hv-upgrade">
       <div className="hv-upgrade-head">
